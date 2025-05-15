@@ -1,11 +1,13 @@
-// File: FeatureExtractor.java
-import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * Provides pure functions for signal feature extraction using sample indices.
  */
-public class FeatureExtractor {
+public final class FeatureExtractor {
+    private FeatureExtractor() {}
+
     /**
      * Detects peak times (in seconds) from raw samples.
      * @param samples List of PCM samples
@@ -15,18 +17,18 @@ public class FeatureExtractor {
      * @return List of peak timestamps in seconds
      */
     public static List<Double> detectPeaks(List<Short> samples, int threshold, int cooldownSamples, double sampleRate) {
-        List<Double> peakTimes = new ArrayList<>();
-        int cooldownCounter = 0;
-        for (int i = 0; i < samples.size(); i++) {
-            short s = samples.get(i);
-            if (cooldownCounter > 0) {
-                cooldownCounter--;
-            } else if (Math.abs(s) > threshold) {
-                peakTimes.add(i / sampleRate);
-                cooldownCounter = cooldownSamples;
-            }
-        }
-        return peakTimes;
+        final int size = samples.size();
+        int[] cooldown = {0};
+        return IntStream.range(0, size)
+                .filter(i -> {
+                    short value = samples.get(i);
+                    boolean isPeak = cooldown[0] <= 0 && Math.abs(value) > threshold;
+                    if (isPeak) cooldown[0] = cooldownSamples;
+                    else if (cooldown[0] > 0) cooldown[0]--;
+                    return isPeak;
+                })
+                .mapToObj(i -> i / sampleRate)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -36,11 +38,9 @@ public class FeatureExtractor {
      */
     public static double calculateBPM(List<Double> peakTimes) {
         if (peakTimes.size() < 2) return 0;
-        double sumDiff = 0.0;
-        for (int i = 1; i < peakTimes.size(); i++) {
-            sumDiff += (peakTimes.get(i) - peakTimes.get(i - 1));
-        }
-        double avgInterval = sumDiff / (peakTimes.size() - 1);
-        return 60.0 / avgInterval;
+        return 60.0 * (peakTimes.size() - 1) /
+                IntStream.range(1, peakTimes.size())
+                        .mapToDouble(i -> peakTimes.get(i) - peakTimes.get(i - 1))
+                        .sum();
     }
 }

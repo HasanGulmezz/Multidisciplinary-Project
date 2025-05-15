@@ -1,12 +1,13 @@
 // File: RealTimeSignalReader.java
-import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import javax.sound.sampled.*;
 
 /**
- * Reads audio data in real-time from the sound card.
+ * Reads audio data in real-time from the sound card using a functional approach.
  */
-public class RealTimeSignalReader implements SignalReader {
+public final class RealTimeSignalReader implements SignalReader {
     private final TargetDataLine line;
     private final int bufferSize;
     private final float sampleRate;
@@ -24,14 +25,14 @@ public class RealTimeSignalReader implements SignalReader {
     public List<Short> readSignals() {
         byte[] byteBuffer = new byte[bufferSize];
         int bytesRead = line.read(byteBuffer, 0, bufferSize);
-        List<Short> samples = new ArrayList<>(bytesRead / 2);
-        for (int i = 0; i < bytesRead - 1; i += 2) {
-            int low = byteBuffer[i] & 0xff;
-            int high = byteBuffer[i + 1];
-            short value = (short) ((high << 8) | low);
-            samples.add(value);
-        }
-        return samples;
+        return IntStream.range(0, bytesRead - 1)
+                .filter(i -> i % 2 == 0)
+                .mapToObj(i -> {
+                    int low = byteBuffer[i] & 0xff;
+                    int high = byteBuffer[i + 1];
+                    return (short) ((high << 8) | low);
+                })
+                .collect(Collectors.toList());
     }
 
     public void close() {

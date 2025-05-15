@@ -1,19 +1,19 @@
-
-// File: SignalProcessor.java
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import javax.swing.SwingUtilities;
+
 /**
  * Orchestrates reading, accumulating, processing, and full-waveform visualization.
  */
-public class SignalProcessor {
+public final class SignalProcessor {
     private final SignalReader reader;
     private final SignalVisualizerFX visualizer;
     private final int threshold;
     private final int cooldownSamples;
     private final double sampleRate;
+
+    private final List<Short> accumulatedSamples = new CopyOnWriteArrayList<>();
     private Thread processingThread;
-    private final List<Short> accumulatedSamples = new ArrayList<>();
 
     public SignalProcessor(SignalReader reader, SignalVisualizerFX visualizer,
                            int threshold, int cooldownSamples, double sampleRate) {
@@ -26,12 +26,16 @@ public class SignalProcessor {
 
     public void startProcessingRealtime() {
         processingThread = new Thread(() -> {
-            while (!Thread.currentThread().isInterrupted()) {
-                List<Short> batch = reader.readSignals();
-                if (batch != null && !batch.isEmpty()) {
-                    accumulatedSamples.addAll(batch);
-                    processAndRender(accumulatedSamples);
+            try {
+                while (!Thread.currentThread().isInterrupted()) {
+                    List<Short> batch = reader.readSignals();
+                    if (batch != null && !batch.isEmpty()) {
+                        accumulatedSamples.addAll(batch);
+                        processAndRender(List.copyOf(accumulatedSamples));
+                    }
                 }
+            } catch (Exception ignored) {
+                // Thread interrupted or other exception; exit cleanly
             }
         });
         processingThread.start();
@@ -40,15 +44,16 @@ public class SignalProcessor {
     public void startProcessingOffline() {
         List<Short> all = reader.readSignals();
         accumulatedSamples.clear();
-        if (all != null) {
+        if (all != null && !all.isEmpty()) {
             accumulatedSamples.addAll(all);
-            processAndRender(accumulatedSamples);
+            processAndRender(List.copyOf(accumulatedSamples));
         }
     }
 
     public void stop() {
         if (processingThread != null) {
             processingThread.interrupt();
+            processingThread = null;
         }
     }
 

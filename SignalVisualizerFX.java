@@ -5,11 +5,10 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 
 import java.util.List;
+import java.util.stream.IntStream;
 
-public class SignalVisualizerFX {
+public final class SignalVisualizerFX {
     private final Canvas canvas;
-    private List<Short> samples;
-    private double bpm;
 
     public SignalVisualizerFX(int width, int height) {
         this.canvas = new Canvas(width, height);
@@ -20,36 +19,45 @@ public class SignalVisualizerFX {
     }
 
     public void renderWaveform(List<Short> samples, double bpm) {
-        this.samples = samples;
-        this.bpm = bpm;
-        Platform.runLater(this::draw);
+        // Defensive copy if needed to ensure immutability (optional)
+        List<Short> safeSamples = (samples == null) ? List.of() : List.copyOf(samples);
+        Platform.runLater(() -> draw(safeSamples, bpm));
     }
 
-    private void draw() {
-
+    private void draw(List<Short> samples, double bpm) {
         GraphicsContext gc = canvas.getGraphicsContext2D();
+
         gc.setFill(Color.web("#121212"));
         gc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
 
+        if (samples.isEmpty()) return;
 
-        if (samples == null || samples.isEmpty()) return;
-
-        int w = (int) canvas.getWidth();
-        int h = (int) canvas.getHeight();
-        int len = samples.size();
+        int width = (int) canvas.getWidth();
+        int height = (int) canvas.getHeight();
         double gain = 2.5;
         double zoom = 1;
+
         gc.setStroke(Color.web("#82f6ee"));
-        for (int i = 1; i < len; i++) {
-            int x1 = (int)((i - 1) * w / (len * zoom));
-            int x2 = (int)(i * w / (len * zoom));
-            int y1 = h / 2 - (int)(samples.get(i - 1) * h / 2 * gain / Short.MAX_VALUE);
-            int y2 = h / 2 - (int)(samples.get(i) * h / 2 * gain / Short.MAX_VALUE);
-            gc.strokeLine(x1, y1, x2, y2);
-        }
+
+        IntStream.range(1, samples.size())
+                .forEach(i -> {
+                    int x1 = scaleX(i - 1, samples.size(), width, zoom);
+                    int x2 = scaleX(i, samples.size(), width, zoom);
+                    int y1 = scaleY(samples.get(i - 1), height, gain);
+                    int y2 = scaleY(samples.get(i), height, gain);
+                    gc.strokeLine(x1, y1, x2, y2);
+                });
 
         gc.setFill(Color.web("#ff7582"));
         gc.setFont(Font.font(20));
         gc.fillText("BPM: " + String.format("%.1f", bpm), 20, 40);
+    }
+
+    private int scaleX(int index, int totalSamples, int width, double zoom) {
+        return (int) (index * width / (totalSamples * zoom));
+    }
+
+    private int scaleY(short sample, int height, double gain) {
+        return height / 2 - (int) (sample * height / 2 * gain / Short.MAX_VALUE);
     }
 }

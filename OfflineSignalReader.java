@@ -1,13 +1,14 @@
 // File: OfflineSignalReader.java
-import java.util.ArrayList;
-import java.util.List;
 import java.io.File;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import javax.sound.sampled.*;
 
 /**
- * Reads audio data from a WAV file offline.
+ * Reads audio data from a WAV file offline using a functional approach.
  */
-public class OfflineSignalReader implements SignalReader {
+public final class OfflineSignalReader implements SignalReader {
     private final AudioInputStream audioStream;
     private final float sampleRate;
 
@@ -18,24 +19,23 @@ public class OfflineSignalReader implements SignalReader {
 
     @Override
     public List<Short> readSignals() {
-        List<Short> samples = new ArrayList<>();
-        try {
+        try (audioStream) {
             AudioFormat format = audioStream.getFormat();
             byte[] buffer = new byte[format.getFrameSize() * 1024];
-            int bytesRead;
-            while ((bytesRead = audioStream.read(buffer)) != -1) {
-                for (int i = 0; i < bytesRead - 1; i += 2) {
-                    int low = buffer[i] & 0xff;
-                    int high = buffer[i + 1];
-                    short value = (short) ((high << 8) | low);
-                    samples.add(value);
-                }
-            }
-            audioStream.close();
+            int bytesRead = audioStream.read(buffer);
+
+            return IntStream.range(0, bytesRead - 1)
+                    .filter(i -> i % 2 == 0)
+                    .mapToObj(i -> {
+                        int low = buffer[i] & 0xFF;
+                        int high = buffer[i + 1];
+                        return (short) ((high << 8) | low);
+                    })
+                    .collect(Collectors.toList());
         } catch (Exception e) {
             e.printStackTrace();
+            return List.of();
         }
-        return samples;
     }
 
     public float getSampleRate() {
